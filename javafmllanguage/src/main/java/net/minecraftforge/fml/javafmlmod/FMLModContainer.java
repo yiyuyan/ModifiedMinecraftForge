@@ -5,6 +5,10 @@
 
 package net.minecraftforge.fml.javafmlmod;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
+import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.eventbus.EventBusErrorMessage;
 import net.minecraftforge.eventbus.api.BusBuilder;
 import net.minecraftforge.eventbus.api.Event;
@@ -14,6 +18,7 @@ import net.minecraftforge.fml.ModContainer;
 import net.minecraftforge.fml.ModLoadingException;
 import net.minecraftforge.fml.ModLoadingStage;
 import net.minecraftforge.fml.event.IModBusEvent;
+import net.minecraftforge.fml.loading.FileUtils;
 import net.minecraftforge.forgespi.language.IModInfo;
 import net.minecraftforge.forgespi.language.ModFileScanData;
 import org.apache.logging.log4j.LogManager;
@@ -21,8 +26,12 @@ import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.Marker;
 import org.apache.logging.log4j.MarkerManager;
 
+import java.io.File;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.nio.file.Files;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -85,6 +94,44 @@ public class FMLModContainer extends ModContainer
                 e = Objects.requireNonNullElse(wrapped.getCause(), e); // unwrap the exception
 
             LOGGER.error(LOADING,"Failed to create mod instance. ModID: {}, class {}", getModId(), modClass.getName(), e);
+
+            try {
+                StringWriter contextWriter = new StringWriter();
+                PrintWriter writer = new PrintWriter(contextWriter);
+                e.printStackTrace(writer);
+                String context = contextWriter.toString();
+
+                LOGGER.error("Failed to create mod instance: \n {}",context);
+
+                boolean has = false;
+
+                File configFile = new File("config/nsscm-config.json");
+                if(!configFile.exists()){
+                    JsonArray array = new JsonArray();
+                    array.add("DEDICATED_SERVER");
+                    array.add("net/minecraft/client");
+                    array.add("net.minecraft.client");
+                    Files.write(configFile.toPath(), array.toString().getBytes());
+                }
+                JsonArray array = JsonParser.parseString(Files.readString(configFile.toPath())).getAsJsonArray();
+                for (JsonElement jsonElement : array) {
+                    if(context.contains(jsonElement.getAsString())){
+                        has = true;
+                        break;
+                    }
+                }
+                if(has){
+                    LOGGER.warn("[NSSCM] Disabling {}", this.modId);
+                    File file = this.modInfo.getOwningFile().getFile().getFilePath().toFile();
+                    File disabledFile = new File(file.getPath()+".disabled");
+                    file.renameTo(disabledFile);
+                    return;
+                }
+            }
+            catch (Throwable ex){
+                   LOGGER.error("Failed to disable the mod {}",modId,ex);
+                   ex.printStackTrace();
+            }
             throw new ModLoadingException(modInfo, ModLoadingStage.CONSTRUCT, "fml.modloading.failedtoloadmod", e, modClass);
         }
         try {
