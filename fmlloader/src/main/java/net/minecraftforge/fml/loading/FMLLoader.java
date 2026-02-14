@@ -6,27 +6,37 @@
 package net.minecraftforge.fml.loading;
 
 import com.mojang.logging.LogUtils;
+import cpw.mods.modlauncher.ArgumentHandler;
 import cpw.mods.modlauncher.Launcher;
+import cpw.mods.modlauncher.TransformationServiceDecorator;
 import cpw.mods.modlauncher.api.*;
 import cpw.mods.modlauncher.serviceapi.ILaunchPluginService;
 import cpw.mods.modlauncher.util.ServiceLoaderUtils;
+import joptsimple.OptionParser;
+import joptsimple.OptionSet;
 import net.minecraftforge.fml.loading.moddiscovery.BackgroundScanHandler;
 import net.minecraftforge.fml.loading.moddiscovery.ModDiscoverer;
 import net.minecraftforge.fml.loading.moddiscovery.ModFile;
 import net.minecraftforge.fml.loading.moddiscovery.ModValidator;
 import net.minecraftforge.accesstransformer.service.AccessTransformerService;
 import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.fml.loading.progress.StartupNotificationManager;
 import net.minecraftforge.fml.loading.targets.CommonLaunchHandler;
 import net.minecraftforge.forgespi.Environment;
 import net.minecraftforge.forgespi.coremod.ICoreModProvider;
 import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 
+import java.lang.management.ManagementFactory;
+import java.lang.management.RuntimeMXBean;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static net.minecraftforge.fml.loading.LogMarkers.CORE;
@@ -67,6 +77,31 @@ public class FMLLoader
 
         // Allows us to communicate properties with other services through ModLauncher
         setupBlackboardKeys();
+
+        LOGGER.info("Launching mixin transformation services...");
+        try {
+            Class<?> clazz = Class.forName("org.spongepowered.asm.launch.MixinTransformationService");
+            ITransformationService o = (ITransformationService) clazz.getConstructor().newInstance();
+
+            Field argHandlerF = Launcher.class.getDeclaredField("argumentHandler");
+            argHandlerF.setAccessible(true);
+            ArgumentHandler argumentHandler = (ArgumentHandler) argHandlerF.get(Launcher.INSTANCE);
+
+            Method processArgsM = argumentHandler.getClass().getDeclaredMethod("processArguments", cpw.mods.modlauncher.Environment.class, Consumer.class, BiConsumer.class);
+            processArgsM.setAccessible(true);
+            Consumer<OptionParser> parserConsumer = (parser)->{
+              o.arguments((a,b)-> parser.accepts(o.name()+"."+a,b));
+            };
+            BiConsumer<OptionSet, BiFunction<String, OptionSet, ITransformationService.OptionResult>> resultConsumer = (optionSet,resultHandler)->{
+              o.argumentValues(resultHandler.apply(o.name(),optionSet));
+            };
+
+            processArgsM.invoke(argumentHandler,Launcher.INSTANCE.environment(),parserConsumer,resultConsumer);
+
+            o.initialize(environment);
+        } catch (Throwable e) {
+            LOGGER.error("1: ",e);
+        }
 
         accessTransformer = (AccessTransformerService) environment.findLaunchPlugin("accesstransformer").orElseThrow(()-> {
             LOGGER.error(CORE, "Access Transformer library is missing, we need this to run");

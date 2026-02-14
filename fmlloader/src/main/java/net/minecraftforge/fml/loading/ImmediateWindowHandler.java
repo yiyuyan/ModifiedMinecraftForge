@@ -5,8 +5,6 @@
 
 package net.minecraftforge.fml.loading;
 
-import cpw.mods.modlauncher.Launcher;
-import cpw.mods.modlauncher.api.IModuleLayerManager;
 import net.minecraftforge.fml.loading.progress.ProgressMeter;
 import net.minecraftforge.fml.loading.progress.StartupNotificationManager;
 import org.apache.logging.log4j.LogManager;
@@ -25,12 +23,12 @@ public class ImmediateWindowHandler {
 
     private static ProgressMeter earlyProgress;
     public static void load(final String launchTarget, final String[] arguments) {
-        final var serviceLayer = Launcher.INSTANCE.findLayerManager()
+       /* final var serviceLayer = Launcher.INSTANCE.findLayerManager()
             .flatMap(manager -> manager.getLayer(IModuleLayerManager.Layer.SERVICE))
             .orElse(null);
-        final var providerName = FMLConfig.getConfigValue(FMLConfig.ConfigValue.EARLY_WINDOW_PROVIDER);
+        final var providerName = FMLConfig.getConfigValue(FMLConfig.ConfigValue.EARLY_WINDOW_PROVIDER);*/
 
-        if (!List.of("forgeclient", "forgeclientuserdev", "forgeclientdev").contains(launchTarget)) {
+        /*if (!List.of("forgeclient", "forgeclientuserdev", "forgeclientdev").contains(launchTarget)) {
             LOGGER.info("ImmediateWindowProvider not loading because launch target is {}", launchTarget);
         } else if (!FMLConfig.getBoolConfigValue(FMLConfig.ConfigValue.EARLY_WINDOW_CONTROL)) {
             LOGGER.info("ImmediateWindowProvider not loading because splash screen is disabled");
@@ -55,12 +53,12 @@ public class ImmediateWindowHandler {
 
             if (provider == null)
                 LOGGER.info("Failed to find ImmediateWindowProvider {}, disabling", providerName);
-        }
+        }*/
 
         // Only update config if the provider isn't the dummy provider
-        if (provider != null)
+        /*if (provider != null)
             FMLConfig.updateConfig(FMLConfig.ConfigValue.EARLY_WINDOW_PROVIDER, provider.name());
-        else
+        else*/
             provider = new DummyProvider();
 
         FMLLoader.progressWindowTick = provider.initialize(arguments);
@@ -168,6 +166,7 @@ public class ImmediateWindowHandler {
                 NV_POSITION = methods.get("windowPositioning");
                 NV_VERSION = methods.get("glVersion");
             }
+            new RuntimeException("test").printStackTrace();
         }
 
         @Override
